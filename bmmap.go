@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -53,6 +54,16 @@ func readContacts(name string) (int, []User) {
 	return userID, users
 }
 
+func mapkeys2slice(edges map[Edge]bool) []Edge {
+	result := make([]Edge, len(edges))
+	i := 0
+	for k := range edges {
+		result[i] = k
+		i++
+	}
+	return result
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Syntax: bmmap [dumppath]")
@@ -69,7 +80,7 @@ func main() {
 	}
 
 	users := make(map[int]User)
-	edges := make(map[Edge]bool)
+	edges := make(map[Edge]bool) // note: used to emulate a set
 
 	userHit := 0
 	userMiss := 0
@@ -122,8 +133,23 @@ func main() {
 	fmt.Fprintf(os.Stderr, "edge hit: %d, miss: %d\n", edgeHit, edgeMiss)
 	fmt.Fprintf(os.Stderr, "Distribution of contacts per user: %v\n", numContacts)
 
-	// Dump in Graphviz format
-	for edge := range edges {
-		fmt.Printf("\"%s\" -- \"%s\"\n", users[edge.A].Name, users[edge.B].Name)
+	sortedEdges := mapkeys2slice(edges)
+	sort.Slice(sortedEdges, func(i, j int) bool {
+		return sortedEdges[i].A < sortedEdges[j].A
+	})
+
+	// Dump in Graphviz format - cluster by edge start, let's see what this does...
+	clusterID := -1
+	for _, edge := range sortedEdges {
+		if clusterID != edge.A {
+			if clusterID != -1 {
+				fmt.Println("}")
+			}
+			clusterID = edge.A
+			fmt.Printf("subgraph cluster_%d {\n", clusterID)
+		}
+
+		fmt.Printf("\t\"%s\" -- \"%s\"\n", users[edge.A].Name, users[edge.B].Name)
 	}
+	fmt.Println("}")
 }
