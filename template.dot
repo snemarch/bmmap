@@ -1,0 +1,10 @@
+graph BlackMarketMap {
+	node [shape=none fontsize=8 fontcolor="red"];
+	root="username"
+	ranksep=3
+	nodesep=2.0
+	overlap=prism
+
+	// rest goes here
+
+}

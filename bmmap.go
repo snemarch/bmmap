@@ -25,6 +25,11 @@ type Edge struct {
 	B int
 }
 
+type jsonOutput struct {
+	Users []User `json:"users"`
+	Edges []Edge `json:"edges"`
+}
+
 var numContacts = make(map[int]int)
 
 func readContacts(name string) (int, []User) {
@@ -54,7 +59,7 @@ func readContacts(name string) (int, []User) {
 	return userID, users
 }
 
-func mapkeys2slice(edges map[Edge]bool) []Edge {
+func edgeValues(edges map[Edge]bool) []Edge {
 	result := make([]Edge, len(edges))
 	i := 0
 	for k := range edges {
@@ -62,6 +67,68 @@ func mapkeys2slice(edges map[Edge]bool) []Edge {
 		i++
 	}
 	return result
+}
+
+func userValues(users map[int]User) []User {
+	result := make([]User, len(users))
+	i := 0
+	for _, v := range users {
+		result[i] = v
+		i++
+	}
+	return result
+}
+
+func userIDs(users map[int]bool) []int {
+	result := make([]int, len(users))
+	i := 0
+	for v := range users {
+		result[i] = v
+		i++
+	}
+	return result
+}
+
+func dumpGraphviz(users map[int]User, edges []Edge) {
+	clusterID := -1
+	for _, edge := range edges {
+		if clusterID != edge.A {
+			if clusterID != -1 {
+				fmt.Println("}")
+			}
+			clusterID = edge.A
+			fmt.Printf("subgraph cluster_%d {\n", clusterID)
+		}
+
+		fmt.Printf("\t\"%s\" -- \"%s\"\n", users[edge.A].Name, users[edge.B].Name)
+	}
+	fmt.Println("}")
+}
+
+func dumpJSON(users map[int]User, edges []Edge) {
+	dump := jsonOutput{Users: userValues(users), Edges: edges}
+	bytes, _ := json.Marshal(dump)
+	os.Stdout.Write(bytes)
+}
+
+func prune(users map[int]User, edges map[Edge]bool) (int, map[int]bool) {
+	numPruned := 0
+	pruned := make(map[int]bool)
+	for edge := range edges {
+		_, hasA := users[edge.A]
+		_, hasB := users[edge.B]
+		if !hasA || !hasB {
+			numPruned++
+			if !hasA {
+				pruned[edge.A] = true
+			}
+			if !hasB {
+				pruned[edge.B] = true
+			}
+			delete(edges, edge)
+		}
+	}
+	return numPruned, pruned
 }
 
 func main() {
@@ -110,46 +177,37 @@ func main() {
 			   However, a social graph like this is not directed, so we can greatly reduce the amount of edges by not
 			   inserting a (b -> a) edge if we already have a (a -> b) one.
 			*/
-			for _, user := range contacts {
-				edgeA := Edge{A: userID, B: user.ID}
-				edgeB := Edge{A: user.ID, B: userID}
+			edgeA := Edge{A: userID, B: contact.ID}
+			edgeB := Edge{A: contact.ID, B: userID}
 
-				if edges[edgeA] || edges[edgeB] {
-					edgeHit++
-				} else {
-					edges[edgeA] = true
-					edgeMiss++
-					if userID == user.ID {
-						fmt.Fprintf(os.Stderr, "\nUser '%s' (#%d) maps to itself\n", users[userID].Name, userID)
-					}
+			if edges[edgeA] || edges[edgeB] {
+				edgeHit++
+			} else {
+				edges[edgeA] = true
+				edgeMiss++
+				if userID == contact.ID {
+					fmt.Fprintf(os.Stderr, "\nUser '%s' (#%d) maps to itself\n", users[userID].Name, userID)
 				}
 			}
 		}
 	}
 
+	numPruned, pruned := prune(users, edges)
+	prunedIDs := userIDs(pruned)
+
 	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "%d edges pruned because of %d missing users: %v\n",
+		numPruned, len(prunedIDs), prunedIDs)
 	fmt.Fprintf(os.Stderr, "done! - %d users\n", len(users))
 	fmt.Fprintf(os.Stderr, "user hit: %d, miss: %d\n", userHit, userMiss)
 	fmt.Fprintf(os.Stderr, "edge hit: %d, miss: %d\n", edgeHit, edgeMiss)
 	fmt.Fprintf(os.Stderr, "Distribution of contacts per user: %v\n", numContacts)
 
-	sortedEdges := mapkeys2slice(edges)
+	sortedEdges := edgeValues(edges)
 	sort.Slice(sortedEdges, func(i, j int) bool {
 		return sortedEdges[i].A < sortedEdges[j].A
 	})
 
-	// Dump in Graphviz format - cluster by edge start, let's see what this does...
-	clusterID := -1
-	for _, edge := range sortedEdges {
-		if clusterID != edge.A {
-			if clusterID != -1 {
-				fmt.Println("}")
-			}
-			clusterID = edge.A
-			fmt.Printf("subgraph cluster_%d {\n", clusterID)
-		}
-
-		fmt.Printf("\t\"%s\" -- \"%s\"\n", users[edge.A].Name, users[edge.B].Name)
-	}
-	fmt.Println("}")
+	//	dumpGraphviz(userValues(users), sortedEdges)
+	dumpJSON(users, sortedEdges)
 }
