@@ -1,0 +1,32 @@
+<html>
+	<head>
+		<link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css">
+
+		<style type="text/css">
+			#graph {
+				width: 1024px;
+				height: 768px;
+				border: 2px solid black;
+			}
+		</style>
+	</head>
+	<body>
+		<table>
+			<tr>
+				<td>Username:</td>
+				<td><input id="userName" type="text">
+			</tr>
+			<tr>
+				<td>Depth:</td>
+				<td><select id="depth"><option selected>1</option><option>2</option></select>&nbsp;<i>Note: depth 2 is <b>slow</b></i></td>
+			</tr>
+		</table>
+		<button id="renderButton" onclick="do_render()" disabled>Render!</button><br></td>
+		<br>
+		<div id="graph"></div>
+	</body>
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js"></script>
+	<script src="bmmap.js"></script>
+</html>
