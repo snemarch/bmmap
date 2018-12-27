@@ -20,8 +20,14 @@
 				<td>Depth:</td>
 				<td><select id="depth"><option selected>1</option><option>2</option></select>&nbsp;<i>Note: depth 2 is <b>slow</b></i></td>
 			</tr>
+			<tr>
+				<td><button id="renderButton" onclick="clickRender()" disabled>Render!</button></td>
+				<td><button id="resetButton" onclick="clickReset()">Reset!</button></td>
+			</tr>
+			<tr>
+				<td>Double-click a user to add their contacts to the graph</td>
+			</tr>
 		</table>
-		<button id="renderButton" onclick="clickRender()" disabled>Render!</button><br></td>
 		<br>
 		<div id="graph"></div>
 	</body>

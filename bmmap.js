@@ -2,10 +2,13 @@
 "use strict";
 
 var state = {
+	users: null,
 	usersById: null,
 	usersByName: null,
+	userSet: new Set(),
 	graphContainer: null,
-	graph: null
+	graph: null,
+	graphData: null
 };
 
 fetch("data/bmmap.json")
@@ -57,6 +60,7 @@ function subselect(output, node, visited, depth) {
 
 function doParse(json) {
 	console.log("Making user lookup maps...");
+	state.users = json.users;
 	state.usersById = _.keyBy(json.users, 'userId');
 	state.usersByName = _.keyBy(json.users, 'userName');
 
@@ -73,6 +77,13 @@ function clickRender() {
 	depth = parseInt(depth.options[depth.selectedIndex].value, 10);
 
 	renderUser(userName.value, depth);
+}
+
+function clickReset() {
+	state.users.forEach(u => u.isProcessed = false);
+	state.userSet.clear();
+	state.graphData.nodes.clear();
+	state.graphData.edges.clear();
 }
 
 function renderUser(userName, depth) {
@@ -93,46 +104,65 @@ function renderUser(userName, depth) {
 	subselect(subtree, root, visited, depth);
 	
 	try {
-		initializeGraph(subtree);
+		if(initializeGraph(subtree)) {
+			// graph already initialized, add dataset to existing graph. TODO: avoid duplicate edges.
+			var filtered = _.filter(subtree.nodes, n => !state.userSet.has(n.userId));
+
+			state.graphData.nodes.add(_.map(filtered, massageNode));
+			state.graphData.edges.add(subtree.edges);
+
+			subtree.nodes.map(n => n.userId).forEach(id => state.userSet.add(id));
+		}
 	}
 	catch(ex) {
 		console.error(ex);
 		return;
 	}
+
+	console.log("Done!");
+}
+
+function massageNode(node) {
+	return {
+		id: node.userId,
+		label: node.userName
+	};
 }
 
 function initializeGraph(subtree) {
 	if(state.graph != null) {
-		return;
+		return true;
 	}
 
+	console.log("Current userset: ", state.userSet);
+	subtree.nodes.map(n => n.userId).forEach(id => state.userSet.add(id));
+	console.log("Updated userset: ", state.userSet);
+
 	console.log("Constructing VisJS stuff...");
-	var nodes = new vis.DataSet(_.map(subtree.nodes, o => {
-			return {
-				id: o.userId,
-				label: o.userName
-			};
-		}));
+	var nodes = new vis.DataSet(_.map(subtree.nodes, massageNode));
 
 	var edges = new vis.DataSet(subtree.edges);
 
-	var visData = { nodes: nodes, edges: edges };
+	state.graphData = { nodes: nodes, edges: edges };
 	var options = {
 		physics: {
 			enabled: true,
-			// barnesHut: {
-			//     avoidOverlap: 0.5
-			// }
 		},
 		layout: {
-			// hierarchical: true,
 			improvedLayout: false
 		}
 	};
 
-	state.graph = new vis.Network(state.graphContainer, visData, options);
+	state.graph = new vis.Network(state.graphContainer, state.graphData, options);
 	state.graph.on("selectNode", function(node) {
 		console.log("Selected: ", state.usersById[node.nodes[0]].userName);
 	});
+	state.graph.on("doubleClick", function(node) {
+		if(node.nodes.length > 0) {
+			renderUser(state.usersById[node.nodes[0]].userName,1 );
+		}
+	});
 	console.log("Done!");
+
+	return false;
 }
