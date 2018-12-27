@@ -1,10 +1,20 @@
+/* globals _, alert, console, document, fetch, vis */
 "use strict";
 
-fetch("bmmap.json")
-.then(function(responce) {
-    return responce.json();
+var state = {
+    usersById: null,
+    usersByName: null,
+    graphContainer: null,
+    graph: null
+};
+
+fetch("data/bmmap.json")
+.then(function(response) {
+    return response.json();
 }).then(function(json) {
-    do_parse(json);
+    doParse(json);
+    state.graphContainer = document.getElementById('graph');
+
 });
 
 function addContact(users, a, b) {
@@ -19,15 +29,21 @@ function addContact(users, a, b) {
 
 function buildGraph(users, edges) {
     edges.forEach(e => {
-        addContact(users, e.A, e.B)
-        addContact(users, e.B, e.A)
+        addContact(users, e.A, e.B);
+        addContact(users, e.B, e.A);
     });
 }
 
 function subselect(output, node, visited, depth) {
     if(depth < 1) {
-        return
+        return;
     }
+
+    if(node.isProcessed) {
+        console.log(`User ${node.userName} already processed`);
+        return;
+    }
+    node.isProcessed = true;
 
     node.contacts.forEach(c => {
         output.edges.push({from: node.userId, to: c.userId });
@@ -40,34 +56,35 @@ function subselect(output, node, visited, depth) {
     });
 }
 
-var usersById, usersByName;
-
-function do_parse(json) {
-    console.log("Making user lookup maps...")
-    usersById = _.keyBy(json.users, 'userId');
-    usersByName = _.keyBy(json.users, 'userName');
+function doParse(json) {
+    console.log("Making user lookup maps...");
+    state.usersById = _.keyBy(json.users, 'userId');
+    state.usersByName = _.keyBy(json.users, 'userName');
 
     console.log("Building graph...");
-    buildGraph(usersById, json.edges);
+    buildGraph(state.usersById, json.edges);
 
     document.getElementById('renderButton').disabled = false;
 }
 
-function do_render() {
+function clickRender() {
     var userName = document.getElementById('userName');
     var depth = document.getElementById('depth');
 
     depth = parseInt(depth.options[depth.selectedIndex].value, 10);
 
-    render_user(userName.value, depth);
+    renderUser(userName.value, depth);
 }
 
-function render_user(userName, depth) {
-    console.log("Building subtree...")
-    var root = usersByName[userName];
+function renderUser(userName, depth) {
+    console.log("Building subtree...");
+    var root = state.usersByName[userName];
     if(!root) {
         alert("User not found!");
         return;
+    }
+    if(root.isProcessed) {
+        console.log(`User ${userName} already processed`);
     }
 
     var subtree = {nodes:[root], edges:[]};
@@ -75,27 +92,31 @@ function render_user(userName, depth) {
     visited[root.userId] = true;
 
     subselect(subtree, root, visited, depth);
-
-    console.log("Subtree: ", subtree);
-
-    console.log("Constructing VisJS stuff...");
-
+    
     try {
-        var nodes = new vis.DataSet(_.map(subtree.nodes, o => {
-            return {
-                id: o.userId,
-                label: o.userName
-            }
-        }));
-
-        var edges = new vis.DataSet(subtree.edges);
+        initializeGraph(subtree);
     }
     catch(ex) {
         console.error(ex);
         return;
     }
+}
 
-    var container = document.getElementById('graph')
+function initializeGraph(subtree) {
+    if(state.graph != null) {
+        return;
+    }
+
+    console.log("Constructing VisJS stuff...");
+    var nodes = new vis.DataSet(_.map(subtree.nodes, o => {
+            return {
+                id: o.userId,
+                label: o.userName
+            };
+        }));
+
+    var edges = new vis.DataSet(subtree.edges);
+
     var visData = { nodes: nodes, edges: edges };
     var options = {
         physics: {
@@ -110,6 +131,9 @@ function render_user(userName, depth) {
         }
     };
 
-    var network = new vis.Network(container, visData, options);
+    state.graph = new vis.Network(state.graphContainer, visData, options);
+    state.graph.on("selectNode", function(node) {
+        console.log("Selected: ", state.usersById[node.nodes[0]].userName);
+    });
     console.log("Done!");
 }
